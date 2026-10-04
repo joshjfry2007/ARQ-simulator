@@ -1,10 +1,13 @@
 from packet import Packet
 from channel import Channel
-from config import PACKET_LOSS_PROB
+from config import get_config
+import random
 
 
+config = get_config()
+random.seed(config.seed)
 channel = Channel(
-    packet_loss_prob=PACKET_LOSS_PROB,
+    pack_loss_prob=config.loss,
     ack_loss_prob=0.0
 )
 

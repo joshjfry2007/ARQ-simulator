@@ -1,9 +1,9 @@
 import random
 
-class channel:
+class Channel:
     
     def __init__(self, pack_loss_prob = 0.0, ack_loss_prob=0.0):
-        self.packet_loss_prob = pack_loss_prob;
+        self.pack_loss_prob = pack_loss_prob;
         self.ack_loss_prob = ack_loss_prob;
     
 
