@@ -110,8 +110,8 @@ def run_go_back_n(num_packets=15, window_size=4, loss_prob=0.2, ack_loss_prob=0.
                 transmit(seq)
             timer_start = t
 
-        # 3. Send a new packet if the window allows
-        if next_seq < base + window_size and next_seq < num_packets:
+        # 3. Send new packets while the window allows (all in the same time step)
+        while next_seq < base + window_size and next_seq < num_packets:
             seq = next_seq
             next_seq += 1
             transmit(seq)
