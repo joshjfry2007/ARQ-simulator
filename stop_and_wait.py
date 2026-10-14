@@ -12,7 +12,7 @@ def run_stop_and_wait(num_packets=10, loss_prob=0.2, ack_loss_prob=0.2,
     delivered = []
 
     # Initialize shared Channel and Metrics instances
-    ch = Channel(pack_loss_prob=loss_prob, ack_loss_prob=ack_loss_prob)
+    ch = Channel(packet_loss_prob=loss_prob, ack_loss_prob=ack_loss_prob)
     m = Metrics()
 
     def log(msg):
@@ -42,7 +42,6 @@ def run_stop_and_wait(num_packets=10, loss_prob=0.2, ack_loss_prob=0.2,
 
             # Use Member B's shared Channel.send() method for data packet
             if not ch.send(pkt):
-                m.record_retransmit()  # tracking data loss impact or handling as needed
                 log(f"CHANNEL  data packet {i} LOST")
                 clock += timeout
                 log(f"SENDER   TIMEOUT (no ACK for seq={seq})")

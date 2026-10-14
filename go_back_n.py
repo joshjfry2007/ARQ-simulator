@@ -13,7 +13,7 @@ def run_go_back_n(num_packets=15, window_size=4, loss_prob=0.2, ack_loss_prob=0.
     delivered_count = 0
 
     # Initialize shared Channel and Metrics instances
-    ch = Channel(pack_loss_prob=loss_prob, ack_loss_prob=ack_loss_prob)
+    ch = Channel(packet_loss_prob=loss_prob, ack_loss_prob=ack_loss_prob)
     m = Metrics()
 
     def log(msg):
