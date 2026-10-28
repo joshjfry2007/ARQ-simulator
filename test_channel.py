@@ -1,31 +1,34 @@
+# test_channel.py
+# Verification of the IoT Wireless Channel simulator.
+
+import random
 from packet import Packet
 from channel import Channel
 from config import get_config
-import random
 
 
 config = get_config()
 random.seed(config.seed)
 channel = Channel(
-    pack_loss_prob=config.loss,
-    ack_loss_prob=0.0
+    packet_loss_prob=config.loss,
+    ack_loss_prob=0.0,
 )
 
 total_packets = 1000
 lost_packets = 0
 
-
 for i in range(total_packets):
-    packet = Packet(i, f"data-{i}")
-
+    packet = Packet(i, device_id=config.device_id, metric=config.metric)
     delivered = channel.send(packet)
-
     if not delivered:
         lost_packets += 1
 
-
 loss_percentage = (lost_packets / total_packets) * 100
 
-print("Total packets:", total_packets)
-print("Lost packets:", lost_packets)
-print("Observed loss:", loss_percentage, "%")
+print("--- IoT Wireless Channel Loss Test ---")
+print(f"Device ID              : {config.device_id}")
+print(f"Monitored Metric       : {config.metric.capitalize()} ({config.unit})")
+print(f"Total telemetry packets: {total_packets}")
+print(f"Lost telemetry packets : {lost_packets}")
+print(f"Observed channel loss  : {loss_percentage:.2f}%")
+print(f"Configured loss target : {config.loss * 100:.2f}%")

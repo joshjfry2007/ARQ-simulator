@@ -1,17 +1,31 @@
+# selective_repeat.py
+# Selective Repeat ARQ simulation for IoT Sensor Telemetry.
+#
+# IoT Device: IoT-TempNode-01
+# Monitored Metric: Temperature (°C)
+#
+# IoT Performance Characteristics:
+#   - Pipelined transmissions (Window N).
+#   - Individual timers per telemetry packet.
+#   - Gateway buffers out-of-order telemetry readings.
+#   - IoT Device retransmits ONLY unacknowledged packets.
+#   - Achieves lowest radio transmission energy overhead per telemetry reading.
 
 import random
 
-from packet import Packet
+from packet import Packet, DEFAULT_DEVICE_ID, DEFAULT_METRIC
 from channel import Channel
 from metrics import Metrics
 from config import get_config
 
 
 class Sender:
-    def __init__(self, total_packets, window_size, timeout):
+    def __init__(self, total_packets, window_size, timeout, device_id=DEFAULT_DEVICE_ID, metric=DEFAULT_METRIC):
         self.total_packets = total_packets
         self.window_size = window_size
         self.timeout = timeout
+        self.device_id = device_id
+        self.metric = metric
 
         self.base = 0
         self.next_seq = 0
@@ -38,7 +52,7 @@ class Sender:
             return
 
         if not self.acked[seq]:
-            print(f"Sender: ACK received for packet {seq}")
+            print(f"IoT-NODE [{self.device_id}]: ACK received for telemetry packet {seq}")
             self.acked[seq] = True
             self.send_times.pop(seq, None)
 
@@ -62,9 +76,10 @@ class Sender:
 
 
 class Receiver:
-    def __init__(self, total_packets, window_size):
+    def __init__(self, total_packets, window_size, metric=DEFAULT_METRIC):
         self.total_packets = total_packets
         self.window_size = window_size
+        self.metric = metric
         self.expected_seq = 0
         self.buffer = {}
         self.delivered_packets = []
@@ -84,7 +99,7 @@ class Receiver:
 
         if seq not in self.buffer:
             self.buffer[seq] = data
-            print(f"Receiver: Packet {seq} received")
+            print(f"GATEWAY: Telemetry packet {seq} received ({data})")
 
         delivered = []
 
@@ -97,8 +112,7 @@ class Receiver:
             self.delivered_packets.append(
                 (self.expected_seq, data_to_deliver)
             )
-
-            print(f"Receiver: Packet {self.expected_seq} delivered")
+            print(f"GATEWAY: Telemetry packet {self.expected_seq} delivered to cloud buffer")
             self.expected_seq += 1
 
         return delivered, True
@@ -109,10 +123,12 @@ def run_simulation(
     window_size,
     timeout,
     channel,
-    metrics
+    metrics,
+    device_id=DEFAULT_DEVICE_ID,
+    metric=DEFAULT_METRIC,
 ):
-    sender = Sender(total_packets, window_size, timeout)
-    receiver = Receiver(total_packets, window_size)
+    sender = Sender(total_packets, window_size, timeout, device_id=device_id, metric=metric)
+    receiver = Receiver(total_packets, window_size, metric=metric)
 
     # Events: (delivery_time, event_type, sequence_number, data)
     events = []
@@ -135,7 +151,7 @@ def run_simulation(
 
                 if should_ack:
                     ack = Packet(seq, None, is_ack=True)
-                    print(f"Receiver: Sending ACK for packet {seq}")
+                    print(f"GATEWAY: Sending ACK for telemetry packet {seq}")
 
                     if channel.send(ack):
                         events.append(
@@ -146,16 +162,17 @@ def run_simulation(
 
             elif event_type == "ack":
                 sender.receive_ack(seq)
+                metrics.record_ack_received()
 
         # Retransmit only packets whose individual timers expired.
         for seq in sender.get_timed_out_packets(current_time):
-            print(f"Sender: Retransmitting packet {seq}")
+            print(f"IoT-NODE [{device_id}]: Retransmitting telemetry packet {seq}")
             sender.retransmitted.append(seq)
 
             metrics.record_retransmit()
             metrics.record_sent()
 
-            packet = Packet(seq, f"data-{seq}")
+            packet = Packet(seq, device_id=device_id, metric=metric)
             sender.send_times[seq] = current_time
 
             if channel.send(packet):
@@ -165,9 +182,9 @@ def run_simulation(
 
         # Send new packets while the window has available space.
         for seq in sender.get_packets_to_send():
-            packet = Packet(seq, f"data-{seq}")
+            packet = Packet(seq, device_id=device_id, metric=metric)
 
-            print(f"Sender: Sending packet {seq}")
+            print(f"IoT-NODE [{device_id}]: Sending telemetry packet {seq} ({metric}={packet.value}{packet.unit})")
             metrics.record_sent()
 
             sender.send_times[seq] = current_time
@@ -181,7 +198,6 @@ def run_simulation(
         current_time += 1
 
     # Count delivered packets from the receiver's delivery list.
-    # These are application deliveries, not transmission attempts.
     metrics.packets_delivered = len(receiver.delivered_packets)
 
     print(f"\nSimulation time steps: {current_time}")
@@ -199,17 +215,28 @@ if __name__ == "__main__":
         forced_drop_seq=2
     )
 
-    metrics = Metrics()
+    metrics = Metrics(
+        tx_energy_mj=config.tx_energy,
+        rx_energy_mj=config.rx_energy,
+        idle_power_mj=config.idle_power,
+    )
 
     sender, receiver = run_simulation(
         total_packets=15,
         window_size=4,
         timeout=config.timeout,
         channel=channel,
-        metrics=metrics
+        metrics=metrics,
+        device_id=config.device_id,
+        metric=config.metric,
     )
 
-    print("\n--- Selective Repeat Summary ---")
-    print("Packets delivered:", len(receiver.delivered_packets))
-    print("Retransmitted packets:", sender.retransmitted)
-    print("Metrics:", metrics.summary())
+    energy = metrics.compute_energy(12)
+    print("\n--- SUMMARY: Selective Repeat ARQ (IoT Sensor Telemetry) ---")
+    print(f"IoT Device ID          : {config.device_id}")
+    print(f"Monitored Metric       : {config.metric.capitalize()} ({config.unit})")
+    print("Telemetry delivered    :", len(receiver.delivered_packets))
+    print("Retransmitted packets  :", sender.retransmitted)
+    print("IoT Device Total Energy:", energy["energy_total_mj"], "mJ")
+    print("Energy / Telemetry Pkt :", energy["energy_per_sample_mj"], "mJ/sample")
+    print("Base Metrics           :", metrics.summary())

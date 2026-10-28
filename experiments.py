@@ -1,9 +1,13 @@
 # experiments.py
-# Final experiment run: sweeps the data-loss probability for all three protocols,
-# saves the numbers to results/loss_sweep.csv and draws charts into results/.
+# Sweeps the IoT wireless link data-loss probability for all three ARQ protocols,
+# tracking IoT device energy efficiency, completion time, and retransmissions.
+# Saves numbers to results/loss_sweep.csv and plots charts into results/.
+#
+# Target Device: IoT-TempNode-01
+# Monitored Metric: Temperature (°C)
+# Key Performance Metric: Energy per Telemetry Reading (mJ/sample)
 #
 # Run:  python experiments.py
-# Needs: pip install matplotlib
 
 import argparse
 import csv
@@ -21,9 +25,31 @@ RUNS = 20                        # runs averaged per point (seeds 42..61)
 OUT = "results"
 
 CHARTS = [
-    ("Retransmissions", "Retransmissions (packets)", "retransmissions_vs_loss.png"),
-    ("Completion time", "Completion time (time units)", "completion_time_vs_loss.png"),
-    ("Throughput (pkt/unit)", "Throughput (packets per time unit)", "throughput_vs_loss.png"),
+    (
+        "Energy / Reading (mJ)",
+        "IoT Device Energy per Reading (mJ/sample)",
+        "iot_energy_per_reading_vs_loss.png",
+    ),
+    (
+        "IoT Energy (mJ)",
+        "Total IoT Energy Consumed (mJ)",
+        "iot_total_energy_vs_loss.png",
+    ),
+    (
+        "Retransmissions",
+        "Retransmissions (packets)",
+        "retransmissions_vs_loss.png",
+    ),
+    (
+        "Completion time",
+        "Completion time (time units)",
+        "completion_time_vs_loss.png",
+    ),
+    (
+        "Throughput (pkt/unit)",
+        "Throughput (packets per time unit)",
+        "throughput_vs_loss.png",
+    ),
 ]
 
 
@@ -32,14 +58,28 @@ def main():
     names = [n for n, _ in compare.PROTOCOLS]
     data = {n: {} for n in names}                    # data[protocol][metric] = [values per loss level]
 
+    print("================================================================")
+    print(" Running IoT ARQ Sweep Experiments (IoT-TempNode-01)")
+    print(" Monitored Metric: Temperature (°C) | Key Metric: Energy (mJ)")
+    print("================================================================")
+
     for loss in LOSS_LEVELS:
-        cfg = argparse.Namespace(packets=100, loss=loss, ack_loss=ACK_LOSS,
-                                 window=4, timeout=4, seed=42, runs=RUNS)
+        cfg = argparse.Namespace(
+            device_id="IoT-TempNode-01",
+            metric="temperature",
+            packets=100,
+            loss=loss,
+            ack_loss=ACK_LOSS,
+            window=4,
+            timeout=4,
+            seed=42,
+            runs=RUNS,
+        )
         res = compare.run_all(cfg)
         for n in names:
             for metric, value in res[n].items():
                 data[n].setdefault(metric, []).append(value)
-        print(f"done: loss = {loss:.2f}")
+        print(f"Completed: loss = {loss:.2f}")
 
     # ---- CSV
     metrics = list(data[names[0]].keys())
@@ -55,9 +95,9 @@ def main():
         plt.figure(figsize=(7, 4.5))
         for n, marker in zip(names, ["o", "s", "^"]):
             plt.plot([l * 100 for l in LOSS_LEVELS], data[n][metric], marker=marker, label=n)
-        plt.xlabel("Data packet loss probability (%)")
+        plt.xlabel("IoT Wireless Channel Loss Probability (%)")
         plt.ylabel(ylabel)
-        plt.title(f"{metric} vs packet loss (ACK loss {int(ACK_LOSS * 100)}%, window 4, {RUNS} runs)")
+        plt.title(f"IoT Sensor Node: {metric} vs Packet Loss\n(ACK loss {int(ACK_LOSS * 100)}%, window 4, {RUNS} runs)")
         plt.grid(True, alpha=0.3)
         plt.legend()
         plt.tight_layout()
